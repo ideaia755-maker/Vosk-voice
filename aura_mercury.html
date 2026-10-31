@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>AURA Voice Injector</title>
+  <link rel="stylesheet" href="../../DS AURA/dist/assets/index-DNxJnFiV.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent !important;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    #widget-wrapper {
+      position: relative;
+      width: 320px;
+      height: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-app-region: drag; /* Перетаскивание всего виджета мышью за любое место */
+      cursor: grab;
+    }
+
+    /* Холст для настоящего Liquid Mercury Engine */
+    #mercury-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* Сама стеклянная капсула кнопки AURA */
+    .aura-widget-button {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      padding: 10px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #FFFFFF;
+      background: linear-gradient(180deg, rgba(62, 38, 92, 0.85) 0%, rgba(22, 16, 36, 0.95) 100%);
+      box-shadow: 
+        0 14px 34px rgba(0, 0, 0, 0.75),
+        0 0 24px rgba(168, 85, 247, 0.35),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(192, 132, 252, 0.35);
+      backdrop-filter: blur(16px);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 10;
+    }
+
+    /* Активное состояние при записи голоса */
+    .is-recording .aura-widget-button {
+      border-color: rgba(236, 72, 153, 0.6);
+      box-shadow: 
+        0 0 35px rgba(236, 72, 153, 0.65),
+        0 16px 36px rgba(0, 0, 0, 0.8),
+        inset 0 1px 2px rgba(255, 255, 255, 0.5);
+      background: linear-gradient(180deg, rgba(88, 28, 105, 0.9) 0%, rgba(30, 10, 40, 0.98) 100%);
+    }
+
+    /* Текст внутри кнопки */
+    .button-text {
+      position: relative;
+      z-index: 30;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      transition: color 0.25s ease;
+    }
+
+    .no-mic .aura-widget-button {
+      opacity: 0.5;
+      filter: grayscale(1);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="widget-wrapper">
+    <!-- Кнопка-капсула DS AURA -->
+    <div class="aura-widget-button" id="auraButton" data-aura-material="glass" data-aura="primary">
+      <span class="button-text" id="statusText">AURA Ready</span>
+    </div>
+
+    <!-- Холст для шаров жидкой ртути (Liquid Mercury) -->
+    <canvas id="mercury-canvas"></canvas>
+  </div>
+
+  <script type="module">
+    // Импортируем физический движок из скомпилированного DS AURA
+    const canvas = document.getElementById("mercury-canvas");
+    const ctx = canvas.getContext("2d", { alpha: true });
+    const wrapper = document.getElementById("widget-wrapper");
+    const statusText = document.getElementById("statusText");
+    const auraButton = document.getElementById("auraButton");
+
+    let isRecording = false;
+    let micAvailable = true;
+    let animId = null;
+    let startTime = 0;
+
+    // Шары и физика Liquid Mercury Blobs
+    const blobSeeds = [
+      { id: 0, orbit: 0.02, lane: -0.18, radius: 0.09, depth: 0.92, wobble: 0.2 },
+      { id: 1, orbit: 0.14, lane: 0.24, radius: 0.065, depth: 0.54, wobble: 1.1 },
+      { id: 2, orbit: 0.25, lane: -0.36, radius: 0.08, depth: 0.74, wobble: 2.0 },
+      { id: 3, orbit: 0.37, lane: 0.12, radius: 0.055, depth: 0.42, wobble: 2.8 },
+      { id: 4, orbit: 0.48, lane: 0.34, radius: 0.075, depth: 0.64, wobble: 3.4 },
+      { id: 5, orbit: 0.58, lane: -0.22, radius: 0.06, depth: 0.5, wobble: 4.2 },
+      { id: 6, orbit: 0.68, lane: 0.02, radius: 0.11, depth: 1.0, wobble: 5.0 },
+      { id: 7, orbit: 0.78, lane: -0.42, radius: 0.05, depth: 0.38, wobble: 5.8 },
+      { id: 8, orbit: 0.88, lane: 0.2, radius: 0.08, depth: 0.72, wobble: 6.3 },
+      { id: 9, orbit: 0.95, lane: -0.04, radius: 0.06, depth: 0.46, wobble: 7.2 },
+    ];
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function drawChromeSphere(x, y, radius) {
+      if (radius <= 0) return;
+      ctx.save();
+      // Тень под шаром
+      ctx.beginPath();
+      ctx.ellipse(x, y + radius * 0.45, radius * 1.1, radius * 0.38, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fill();
+
+      // Жидкий хром (Liquid Chrome Gradient)
+      const grad = ctx.createRadialGradient(
+        x - radius * 0.38, y - radius * 0.42, radius * 0.08,
+        x, y, radius
+      );
+      grad.addColorStop(0, "#FFFFFF");
+      grad.addColorStop(0.18, "#E2E8F0");
+      grad.addColorStop(0.38, "#94A3B8");
+      grad.addColorStop(0.68, "#1E293B");
+      grad.addColorStop(0.88, "#0F172A");
+      grad.addColorStop(1, "#020617");
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Ореол отражения света
+      ctx.beginPath();
+      ctx.arc(x - radius * 0.35, y - radius * 0.38, radius * 0.26, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function renderLoop(timestamp) {
+      if (!startTime) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const btnW = 180;
+      const btnH = 50;
+
+      // Если нет микрофона -> шары замирают
+      if (!micAvailable) {
+        // Статичные замершие шары без движения
+        blobSeeds.forEach((b, i) => {
+          const angle = (i / blobSeeds.length) * Math.PI * 2;
+          const sx = cx + Math.cos(angle) * (btnW * 0.65);
+          const sy = cy + Math.sin(angle) * (btnH * 0.75);
+          drawChromeSphere(sx, sy, b.radius * btnH);
+        });
+        animId = requestAnimationFrame(renderLoop);
+        return;
+      }
+
+      // Цикл анимации: при записи вращение быстрое (активное), в покое медленный дрейф
+      const speed = isRecording ? 0.0024 : 0.0006;
+      const cycle = elapsed * speed;
+      const spinBase = cycle * Math.PI * 2;
+
+      blobSeeds.forEach((b) => {
+        const spin = spinBase + b.orbit * Math.PI * 2 + Math.sin(cycle * 3 + b.wobble) * 0.2;
+        const orbitRadiusX = btnW * 0.62 * (0.85 + b.depth * 0.2);
+        const orbitRadiusY = btnH * 0.95 * (0.85 + b.depth * 0.2);
+        const sx = cx + Math.cos(spin) * orbitRadiusX;
+        const sy = cy + Math.sin(spin) * orbitRadiusY;
+        const r = b.radius * btnH * 1.5;
+        drawChromeSphere(sx, sy, r);
+      });
+
+      animId = requestAnimationFrame(renderLoop);
+    }
+    requestAnimationFrame(renderLoop);
+
+    // Управление состоянием из Python
+    window.setRecording = function(active) {
+      isRecording = active;
+      if (active) {
+        wrapper.classList.add("is-recording");
+        statusText.textContent = "Processing...";
+      } else {
+        wrapper.classList.remove("is-recording");
+        statusText.textContent = "AURA Ready";
+      }
+    };
+
+    window.setMicAvailable = function(hasMic) {
+      micAvailable = hasMic;
+      if (!hasMic) {
+        wrapper.classList.add("no-mic");
+        statusText.textContent = "No Mic";
+      } else {
+        wrapper.classList.remove("no-mic");
+        statusText.textContent = isRecording ? "Processing..." : "AURA Ready";
+      }
+    };
+  </script>
+</body>
+</html>

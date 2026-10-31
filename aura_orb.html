@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>AURA Voice Orb</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent !important;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    
+    /* Оболочка кнопки AURA */
+    .aura-orb-container {
+      position: relative;
+      width: 86px;
+      height: 86px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      -webkit-app-region: drag; /* Перетаскивание всего виджета мышью */
+    }
+
+    /* Внешнее глубокое стекло AURA Glass Surface */
+    .aura-glass {
+      position: absolute;
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.12) 0%, rgba(18, 19, 26, 0.88) 60%, rgba(10, 11, 16, 0.95) 100%);
+      box-shadow: 
+        0 12px 32px rgba(0, 0, 0, 0.55),
+        inset 0 1px 2px rgba(255, 255, 255, 0.22),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Энергетический обод AURA Glow */
+    .aura-rim {
+      position: absolute;
+      width: 66px;
+      height: 66px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(137, 180, 250, 0.15);
+      transition: all 0.3s ease;
+    }
+
+    /* Вращающаяся орбита ртутных сфер (Liquid Mercury) */
+    .orbit-system {
+      position: absolute;
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Вращение шаров при активной записи */
+    .recording .orbit-system {
+      animation: mercury-spin 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+    }
+
+    .recording .aura-glass {
+      border-color: rgba(203, 166, 247, 0.45);
+      box-shadow: 
+        0 0 28px rgba(180, 190, 254, 0.35),
+        0 14px 34px rgba(0, 0, 0, 0.65),
+        inset 0 1px 2px rgba(255, 255, 255, 0.4);
+    }
+
+    .recording .aura-rim {
+      border-color: rgba(180, 190, 254, 0.6);
+      box-shadow: 0 0 12px rgba(137, 180, 250, 0.3);
+    }
+
+    @keyframes mercury-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Ртутные сферы (Liquid Mercury Blobs) */
+    .mercury-blob {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 28%, #FFFFFF 0%, #B4BEFE 35%, #74C7EC 70%, #313244 100%);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 0 8px rgba(137, 180, 250, 0.5);
+      transition: transform 0.3s ease;
+    }
+
+    .blob-1 { width: 14px; height: 14px; top: 2px; left: 24px; }
+    .blob-2 { width: 10px; height: 10px; top: 24px; right: 2px; }
+    .blob-3 { width: 13px; height: 13px; bottom: 3px; left: 22px; }
+    .blob-4 { width: 9px; height: 9px; top: 26px; left: 3px; }
+
+    /* Центральное ядро AURA */
+    .aura-core {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #F5C2E7 0%, #CBA6F7 60%, #1E1E2E 100%);
+      box-shadow: 0 0 10px rgba(203, 166, 247, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    .recording .aura-core {
+      background: radial-gradient(circle at 35% 35%, #FFF 0%, #F38BA8 60%, #D20F39 100%);
+      box-shadow: 0 0 14px rgba(243, 139, 168, 0.85);
+      transform: scale(1.15);
+    }
+
+    /* Состояние: НЕТ МИКРОФОНА */
+    .no-mic .orbit-system {
+      animation: none !important;
+      opacity: 0.35;
+      filter: grayscale(1);
+    }
+    .no-mic .aura-glass {
+      border-color: rgba(243, 139, 168, 0.3);
+      filter: saturate(0.4);
+    }
+    .no-mic .aura-core {
+      background: #45475A;
+      box-shadow: none;
+    }
+    .no-mic::after {
+      content: "/";
+      position: absolute;
+      font-size: 26px;
+      font-weight: 900;
+      color: #F38BA8;
+      top: 24px;
+      left: 36px;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="aura-orb-container" id="auraBtn">
+    <div class="aura-glass"></div>
+    <div class="aura-rim"></div>
+    <div class="orbit-system">
+      <div class="mercury-blob blob-1"></div>
+      <div class="mercury-blob blob-2"></div>
+      <div class="mercury-blob blob-3"></div>
+      <div class="mercury-blob blob-4"></div>
+    </div>
+    <div class="aura-core"></div>
+  </div>
+
+  <script>
+    const btn = document.getElementById("auraBtn");
+
+    function setRecording(active) {
+      if (active) {
+        btn.classList.add("recording");
+      } else {
+        btn.classList.remove("recording");
+      }
+    }
+
+    function setMicAvailable(hasMic) {
+      if (!hasMic) {
+        btn.classList.add("no-mic");
+      } else {
+        btn.classList.remove("no-mic");
+      }
+    }
+  </script>
+</body>
+</html>

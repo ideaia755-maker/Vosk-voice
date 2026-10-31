@@ -1,0 +1,13 @@
+# Модели Vosk (скачиваются автоматически через download_model.py)
+model/
+*.zip
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Временные файлы ОС
+.DS_Store
+Thumbs.db
