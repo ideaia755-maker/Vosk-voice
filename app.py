@@ -175,6 +175,11 @@ class AuraExactPhysicsApp:
         self.cycle_time = 0.0
         self.last_anim_time = time.time()
 
+        # Параметры удержания правой кнопки мыши (ПКМ Hold-to-Talk)
+        self.rmb_press_time = 0.0
+        self.rmb_hold_threshold = 0.28  # 280 мс порог удержания для запуска записи
+        self.rmb_timer = None
+
         self._check_mic()
         threading.Thread(target=self._init_vosk, daemon=True).start()
 
@@ -234,7 +239,37 @@ class AuraExactPhysicsApp:
             print(f"[ERR] Vosk error: {e}")
 
     def _on_mouse_click(self, x, y, button, pressed):
-        if button == mouse.Button.middle:
+        # Поддержка ПКМ (правая кнопка) и сохранение скролла (колесико)
+        if button == mouse.Button.right:
+            if pressed:
+                # Фиксируем окно с фокусом в момент нажатия
+                fg = user32.GetForegroundWindow()
+                if fg and fg != self.root.winfo_id():
+                    self.target_hwnd = fg
+                self.rmb_press_time = time.time()
+
+                # Таймер: если ПКМ зажата дольше 280мс -> включаем запись!
+                if self.rmb_timer:
+                    self.rmb_timer.cancel()
+                self.rmb_timer = threading.Timer(self.rmb_hold_threshold, self._on_rmb_held)
+                self.rmb_timer.start()
+            else:
+                # Отпустили ПКМ
+                if self.rmb_timer:
+                    self.rmb_timer.cancel()
+                    self.rmb_timer = None
+
+                if self.is_recording:
+                    # Была запись: отпускаем ПКМ -> распознаем и вставляем
+                    self.root.after(0, self.stop_recording)
+                    # Подавляем появление контекстного меню нажатием клавиши Esc
+                    threading.Thread(target=self._dismiss_context_menu, daemon=True).start()
+                else:
+                    # Обычный быстрый клик ПКМ (<280мс): не мешаем системе вызвать контекстное меню
+                    pass
+
+        elif button == mouse.Button.middle:
+            # Запасной вариант на колёсико мыши
             if pressed:
                 fg = user32.GetForegroundWindow()
                 if fg and fg != self.root.winfo_id():
@@ -242,6 +277,17 @@ class AuraExactPhysicsApp:
                 self.root.after(0, self.start_recording)
             else:
                 self.root.after(0, self.stop_recording)
+
+    def _on_rmb_held(self):
+        """Вызывается, когда ПКМ удерживается дольше порога."""
+        self.root.after(0, self.start_recording)
+
+    def _dismiss_context_menu(self):
+        """Мягко закрывает всплывшее контекстное меню Windows после завершения голосовой записи."""
+        time.sleep(0.04)
+        user32.keybd_event(0x1B, 0, 0, 0) # VK_ESCAPE
+        time.sleep(0.01)
+        user32.keybd_event(0x1B, 0, 2, 0)
 
     def start_recording(self):
         if not self.mic_available or not self.recognizer or self.is_recording:
