@@ -1,17 +1,31 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+import vosk
 
 block_cipher = None
 project_dir = os.path.abspath(SPECPATH)
 
+# DLL файлы Vosk
+vosk_dir = os.path.dirname(vosk.__file__)
+vosk_binaries = [
+    (os.path.join(vosk_dir, f), 'vosk')
+    for f in os.listdir(vosk_dir)
+    if f.endswith('.dll')
+] + [
+    (os.path.join(vosk_dir, f), '.')
+    for f in os.listdir(vosk_dir)
+    if f.endswith('.dll')
+]
+
 a = Analysis(
     ['app.py'],
     pathex=[project_dir],
-    binaries=[],
+    binaries=vosk_binaries,
     datas=[
         ('model', 'model'),
         ('assets', 'assets'),
+        (vosk_dir, 'vosk'), # Кладем всю папку пакета vosk внутрь бандла
     ],
     hiddenimports=[
         'vosk',
@@ -29,7 +43,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['rthook_vosk.py'],
     excludes=['matplotlib', 'scipy', 'playwright', 'tkinter.test'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -49,7 +63,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False, # БЕЗ черного окна консоли! Чистый GUI
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
